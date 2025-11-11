@@ -1,0 +1,65 @@
+name: Render and Publish MP4
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # create/update releases
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-0 pkg-config
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+
+      - name: Render video (Kenyan English VO + music)
+        run: |
+          python src/doodle_bodmas_autorender.py
+
+      - name: Upload artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-doodle-1080x1080
+          path: |
+            build/final_doodle_1080x1080.mp4
+            build/captions.srt
+
+      - name: Publish to GitHub Release (auto-latest)
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/final_doodle_1080x1080.mp4
+          asset_name: final_doodle_1080x1080.mp4
+          tag: auto-latest
+          overwrite: true
+          body: "Auto-rendered whiteboard doodle video with Kenyan English VO."
+
+      - name: Temporary direct link (transfer.sh)
+        id: transfer
+        run: |
+          url=$(curl -s --upload-file build/final_doodle_1080x1080.mp4 https://transfer.sh/final_doodle_1080x1080.mp4)
+          echo "url=$url" >> $GITHUB_OUTPUT
+
+      - name: Job summary with links
+        run: |
+          echo "Permanent Release link:" >> $GITHUB_STEP_SUMMARY
+          echo "https://github.com/${{ github.repository }}/releases/download/auto-latest/final_doodle_1080x1080.mp4" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Temporary direct link (expires):" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.transfer.outputs.url }}" >> $GITHUB_STEP_SUMMARY

@@ -109,9 +109,11 @@ def tts_generate_all():
     vo_durations = []
     for idx, sc in enumerate(SCENES, start=1):
         out = ASSETS / f"vo_{idx}.mp3"
+        # Uses the fallback-capable TTS function we added earlier
         seg = tts_with_fallback(sc["vo"], out, f"scene {idx}")
         vo_durations.append(len(seg) / 1000.0)
-    return vo_durations = []
+    return vo_durations
+    
     for idx, sc in enumerate(SCENES, start=1):
         out = ASSETS / f"vo_{idx}.mp3"
         try:

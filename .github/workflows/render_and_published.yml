@@ -28,12 +28,6 @@ jobs:
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
-          python - <<'PY'
-import manim, edge_tts, moviepy
-print("Manim", manim.__version__)
-print("edge-tts OK")
-print("moviepy", moviepy.__version__)
-PY
 
       - name: Render video
         run: python src/doodle_bodmas_autorender.py
@@ -54,7 +48,7 @@ PY
           asset_name: final_doodle_1080x1080.mp4
           tag: auto-latest
           overwrite: true
-          body: Auto-rendered whiteboard doodle video with Kenyan English VO.
+          body: "Auto-rendered whiteboard doodle video with Kenyan English VO."
 
       - name: Temporary direct link (transfer.sh)
         id: transfer

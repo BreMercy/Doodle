@@ -17,7 +17,9 @@ jobs:
       - name: System dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg espeak-ng fonts-dejavu libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-0 pkg-config
+          sudo apt-get install -y \
+            ffmpeg espeak-ng fonts-dejavu \
+            libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-0 pkg-config
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,10 +31,17 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
 
+      - name: Show repo tree (sanity check)
+        run: |
+          pwd
+          ls -la
+          ls -la src || true
+
       - name: Render video
         run: python src/doodle_bodmas_autorender.py
 
       - name: Upload artifact (backup)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: final-doodle-1080x1080
@@ -41,6 +50,7 @@ jobs:
             build/captions.srt
 
       - name: Publish to GitHub Release (auto-latest)
+        if: success()
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -50,10 +60,29 @@ jobs:
           overwrite: true
           body: "Auto-rendered whiteboard doodle video with Kenyan English VO."
 
-      - name: Temporary direct link (transfer.sh)
-        id: transfer
+      # Optional temp link: ignore errors, retry, and fall back to 0x0.st
+      - name: Temporary direct link (optional)
+        if: success()
+        id: temp_link
+        continue-on-error: true
         run: |
-          echo "Uploading to transfer.sh..."
-          url=$(curl -s --upload-file build/final_doodle_1080x1080.mp4 https://transfer.sh/final_doodle_1080x1080.mp4)
+          set +e
+          echo "Uploading to transfer.sh (will ignore errors)..."
+          url=$(curl -s --retry 5 --retry-delay 5 \
+            --upload-file build/final_doodle_1080x1080.mp4 \
+            https://transfer.sh/final_doodle_1080x1080.mp4)
+          if [ -z "$url" ]; then
+            echo "transfer.sh failed; trying 0x0.st..."
+            url=$(curl -s -F "file=@build/final_doodle_1080x1080.mp4" https://0x0.st) || true
+          fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Temporary link: $url" >> $GITHUB_STEP_SUMMARY
+          echo "Temporary link: ${url:-Unavailable}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Job summary with links
+        if: always()
+        run: |
+          echo "Permanent Release link:" >> $GITHUB_STEP_SUMMARY
+          echo "https://github.com/${{ github.repository }}/releases/download/auto-latest/final_doodle_1080x1080.mp4" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Temporary direct link (if available):" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.temp_link.outputs.url }}" >> $GITHUB_STEP_SUMMARY

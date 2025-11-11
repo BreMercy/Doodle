@@ -1,6 +1,7 @@
 # Renders a 1080x1080 whiteboard-doodle video with Kenyan English VO and soft classroom music.
 # Outputs: build/final_doodle_1080x1080.mp4
 
+import time
 import os
 import sys
 import math
@@ -72,15 +73,45 @@ def ensure_ffmpeg():
     except Exception:
         print("FFmpeg not found. Please install FFmpeg and ensure it's on your PATH.")
         sys.exit(1)
+async def tts_edge_async(text, outfile, voice="en-KE-AsiliaNeural"):
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(str(outfile))
 
+def tts_with_fallback(text: str, out_mp3: Path, label: str):
+    # Try edge-tts with retries
+    last_err = None
+    for attempt in range(5):
+        try:
+            print(f"[TTS] edge-tts {label} attempt {attempt+1}/5")
+            asyncio.run(tts_edge_async(text, out_mp3))
+            seg = AudioSegment.from_file(out_mp3)
+            print(f"[TTS] edge-tts {label} OK, {len(seg)/1000:.2f}s")
+            return seg
+        except Exception as e:
+            last_err = e
+            time.sleep(1 + attempt)
+    print(f"[TTS] edge-tts failed for {label}: {last_err}")
+    # Fallback: espeak-ng (offline)
+    wav_path = out_mp3.with_suffix(".wav")
+    cmd = ["espeak-ng", "-v", "en+f3", "-s", "160", "-p", "40", "-w", str(wav_path), text]
+    subprocess.run(cmd, check=True)
+    seg = AudioSegment.from_file(wav_path).set_frame_rate(44100)
+    seg.export(out_mp3, format="mp3")
+    print(f"[TTS] espeak-ng {label} OK, {len(seg)/1000:.2f}s")
+    return seg
+    
 async def tts_gen_async(text, outfile, voice=VOICE):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(str(outfile))
 
 def tts_generate_all():
-    print("Generating Kenyan English voiceover with edge-tts…")
-    loop = asyncio.get_event_loop()
+    print("Generating voiceover with fallback…")
     vo_durations = []
+    for idx, sc in enumerate(SCENES, start=1):
+        out = ASSETS / f"vo_{idx}.mp3"
+        seg = tts_with_fallback(sc["vo"], out, f"scene {idx}")
+        vo_durations.append(len(seg) / 1000.0)
+    return vo_durations = []
     for idx, sc in enumerate(SCENES, start=1):
         out = ASSETS / f"vo_{idx}.mp3"
         try:
